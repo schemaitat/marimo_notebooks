@@ -1,0 +1,18 @@
+[project]
+name = "marimo-notebooks"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "marimo>=0.11.12",
+    "numpy>=2.2.3",
+    "plotly>=6.0.0",
+    "polars>=1.23.0",
+    "scipy>=1.15.2",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.8",
+]
