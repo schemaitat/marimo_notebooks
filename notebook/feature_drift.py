@@ -154,7 +154,8 @@ def _(mo):
     mo.md(
         """
         # Univariate drift detection by target.
-        The data consists of a single feature f1f_1, a target  tar≥ttarget and a timeseries column tscolts_col.
+
+        The data consists of a single feature f1, a target and a timeseries column ts.
         """
     )
     return
@@ -198,6 +199,28 @@ def _(date, lru_cache, np, pl):
 
 
 @app.cell
+def _(mo):
+    mo.md("""## Visualized chunks""")
+    return
+
+
+@app.cell
+def _(df, mo):
+    mo.md(
+        f"""
+        The plot shows the KDE of the feature f1 for each chunk of the data.
+        The chunks are defined by the timestamp column ts and grouped by the target column target.
+
+        The samling rate is refers to the data generation process. The smaller the value, the more data points will
+        be generated for the given date range.
+
+        The data has {df.height} rows.
+        """
+    )
+    return
+
+
+@app.cell
 def _(date, mo):
     date_range = mo.ui.date_range(
         date(2020, 1, 1),
@@ -233,12 +256,6 @@ def _(date_range, get_data, sampling_rate):
         sampling_rate=f"{sampling_rate.value}s",
     )
     return (df,)
-
-
-@app.cell
-def _(df, mo):
-    mo.md(f"The generated data has {df.height} rows.")
-    return
 
 
 @app.cell
@@ -310,6 +327,36 @@ def _(chunks, go, np):
         row,
         trace,
     )
+
+
+@app.cell
+def _(mo):
+    mo.md("""# Data""")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("""## Raw data""")
+    return
+
+
+@app.cell
+def _(df, mo):
+    mo.ui.table(df.head(20))
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("""## Chunked data""")
+    return
+
+
+@app.cell
+def _(chunks, mo):
+    mo.ui.table(chunks[0])
+    return
 
 
 @app.cell
