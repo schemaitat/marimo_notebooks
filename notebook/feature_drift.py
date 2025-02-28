@@ -1,3 +1,14 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "marimo",
+#     "numpy==2.2.3",
+#     "plotly==6.0.0",
+#     "polars==1.23.0",
+#     "scipy==1.15.2",
+# ]
+# ///
+
 import marimo
 
 __generated_with = "0.11.12"
@@ -299,6 +310,11 @@ def _(chunks, go, np):
         row,
         trace,
     )
+
+
+@app.cell
+def _():
+    return
 
 
 if __name__ == "__main__":
