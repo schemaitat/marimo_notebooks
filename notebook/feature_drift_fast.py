@@ -5,6 +5,7 @@
 #     "numpy==2.2.3",
 #     "plotly==6.0.0",
 #     "polars==1.23.0",
+#     "polars-kde==0.1.3",
 #     "scipy==1.15.2",
 # ]
 # ///
@@ -17,67 +18,26 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
-    import numpy as np
     import polars as pl
+    import numpy as np
     import plotly.express as px
     import plotly.graph_objects as go
     import plotly.io as pio
-
-    from scipy.stats import gaussian_kde
 
     from datetime import datetime, date
     from functools import lru_cache
     from functools import partial
 
+    import polars_kde as pk
+
     import marimo as mo
 
     pio.templates.default = "simple_white"
-    return (
-        date,
-        datetime,
-        gaussian_kde,
-        go,
-        lru_cache,
-        mo,
-        np,
-        partial,
-        pio,
-        pl,
-        px,
-    )
+    return date, datetime, go, lru_cache, mo, np, partial, pio, pk, pl, px
 
 
 @app.cell
-def _(gaussian_kde, np, partial, pl):
-    def get_kde(
-        arr: np.array, *, normalize: bool = True, eval_points: np.array = None
-    ) -> np.array:
-        """
-        Given an array of data points, return the kde evaluated at the eval_points.
-
-        Parameters:
-        -----------
-        arr : np.array
-            The data points to fit the kde on.
-        normalize : bool
-            Normalize the kde.
-        eval_points : np.array
-            The points to evaluate the kde on.
-
-        Returns:
-        --------
-        np.array
-            The evaluated kde values at the specified points.
-        """
-        try:
-            kde = gaussian_kde(arr)
-            kde_points = kde.evaluate(eval_points)
-            if normalize:
-                kde_points = kde_points / kde_points.max()
-            return kde_points
-        except Exception:
-            return np.array([0])
-
+def _(pk, pl):
     def get_chunks(
         df: pl.DataFrame,
         *,
@@ -85,7 +45,7 @@ def _(gaussian_kde, np, partial, pl):
         period: str,
         feature_col: str,
         normalize: bool = True,
-        eval_points: np.array = None,
+        eval_points: list[float] = None,
         group_by=None,
     ) -> pl.DataFrame:
         """
@@ -104,7 +64,7 @@ def _(gaussian_kde, np, partial, pl):
             The column to calculate KDE on.
         normalize : bool
             Normalize the KDE.
-        eval_points : np.array
+        eval_points : list[float]
             The points to evaluate the KDE on.
         group_by : Optional[str]
             The column to group by.
@@ -121,13 +81,17 @@ def _(gaussian_kde, np, partial, pl):
                 group_by=group_by,
             )
             .agg(
-                pl.col(feature_col),
+                kde=pk.kde(
+                    pl.col(feature_col).cast(pl.Float32),
+                    eval_points=eval_points,
+                )
             )
             .with_columns(
-                kde=pl.col(feature_col).map_elements(
-                    partial(get_kde, normalize=normalize, eval_points=eval_points),
-                    return_dtype=pl.List(pl.Float32),
-                ),
+                kde=pl.col("kde") / pl.col("kde").list.max()
+                if normalize
+                else pl.col("kde"),
+            )
+            .with_columns(
                 eval_points=pl.lit(list(eval_points)),
                 chunk_index=pl.cum_count(ts_col).over(
                     group_by,
@@ -137,13 +101,12 @@ def _(gaussian_kde, np, partial, pl):
                 group_key=pl.lit(group_by),
                 group_value=pl.col(group_by) if group_by is not None else pl.lit(None),
             )
-            .drop(feature_col)
             .sort(ts_col)
         )
 
         return df_chunked.partition_by(ts_col)
 
-    return get_chunks, get_kde
+    return (get_chunks,)
 
 
 @app.cell
@@ -185,7 +148,14 @@ def _(date, lru_cache, np, pl):
                 "ts": date_range,
                 "f_1": np.random.normal(0, 1, len(date_range)),
                 "target": np.sin(np.linspace(0, 12 * np.pi, len(date_range))) >= 0,
-            }
+            },
+            schema=pl.Schema(
+                {
+                    "ts": pl.Datetime(time_unit="ns", time_zone="Europe/Berlin"),
+                    "f_1": pl.Float32,
+                    "target": pl.Boolean,
+                }
+            ),
         ).with_columns(
             f_1=pl.col("f_1") + 12 * np.sin(pl.col("ts").dt.month() * 2 * np.pi / 12),
         )
@@ -223,12 +193,12 @@ def _(date, mo):
     )
     sampling_rate = mo.ui.slider(10, 60 * 60, 10, 1800)
     interval = mo.ui.slider(1, 12, 1, 6)
-    kde_eval_points = mo.ui.slider(30, 100, 5, 50)
+    kde_eval_points = mo.ui.slider(50, 1000, 5, 50)
     group_by_target = mo.ui.checkbox(True)
     mo.hstack(
         [
             mo.md(f"Date range: {date_range}"),
-            mo.md(f"Sampling rate in seconds: {sampling_rate}"),
+            mo.md(f"Timestamp frequency in seconds: {sampling_rate}"),
             mo.md(f"Chunk timestamps by {interval} months."),
             mo.md(f"Within each chunk, group by target ?: {group_by_target}"),
             mo.md(f"Sample the kde with {kde_eval_points} points."),
@@ -262,7 +232,7 @@ def _(df, get_chunks, group_by_target, interval, kde_eval_points, np):
         group_by="target" if group_by_target.value else None,
         feature_col="f_1",
         normalize=True,
-        eval_points=np.linspace(-20, 20, kde_eval_points.value),
+        eval_points=np.linspace(-20, 20, kde_eval_points.value).tolist(),
     )
     return (chunks,)
 
@@ -349,11 +319,6 @@ def _(mo):
 @app.cell
 def _(chunks, mo):
     mo.ui.table(chunks[0])
-    return
-
-
-@app.cell
-def _():
     return
 
 
